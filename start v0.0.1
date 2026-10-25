@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Искра — знакомства</title>
+<!-- SDK Telegram Mini Apps: даёт объект window.Telegram.WebApp -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Цвета берутся из темы Telegram (светлая/тёмная), а если открыть просто в браузере — из запасных значений */
+  :root{
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    --text: var(--tg-theme-text-color, #111111);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --accent: #ff4d6d;
+    --accent2: #ff8fa3;
+    --ok: #2ec27e;
+    --radius: 18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overscroll-behavior:none}
+  button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+  input,textarea,select{font:inherit;color:var(--text);background:var(--bg2);border:1px solid transparent;
+    border-radius:12px;padding:12px 14px;width:100%;outline:none}
+  input:focus,textarea:focus,select:focus{border-color:var(--accent)}
+  textarea{resize:none;min-height:90px}
+  .app{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto}
+  .screen{flex:1;overflow-y:auto;padding:16px;display:none}
+  .screen.active{display:block}
+  h1{font-size:26px;margin:4px 0 4px}
+  h2{font-size:20px;margin:0 0 12px}
+  .muted{color:var(--hint);font-size:14px}
+  .field{margin:14px 0}
+  .field label{display:block;font-size:13px;color:var(--hint);margin:0 0 6px 4px}
+  .row{display:flex;gap:10px}
+  .row>*{flex:1}
+  .btn{display:block;width:100%;padding:15px;border-radius:14px;background:var(--accent);color:#fff;
+    font-weight:600;font-size:16px;margin-top:18px}
+  .btn.ghost{background:var(--bg2);color:var(--text)}
+  .btn:active{transform:scale(.98)}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{padding:8px 12px;border-radius:999px;background:var(--bg2);font-size:14px}
+  .chip.on{background:var(--accent);color:#fff}
+  .seg{display:flex;background:var(--bg2);border-radius:12px;padding:4px}
+  .seg button{flex:1;padding:10px;border-radius:9px;font-size:14px}
+  .seg button.on{background:var(--bg);box-shadow:0 1px 4px rgba(0,0,0,.12);font-weight:600}
+
+  /* Фото профиля */
+  .avatar-pick{display:flex;align-items:center;gap:14px}
+  .avatar{width:84px;height:84px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#7b5cff);
+    display:grid;place-items:center;color:#fff;font-size:34px;font-weight:700;background-size:cover;background-position:center;flex:none}
+
+  /* Лента анкет */
+  #feed{display:none;flex-direction:column;padding:12px 16px 8px}
+  #feed.active{display:flex}
+  .deck{position:relative;flex:1;min-height:360px}
+  .card{position:absolute;inset:0;border-radius:24px;overflow:hidden;color:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,.18);touch-action:none;user-select:none;will-change:transform}
+  .card .pic{position:absolute;inset:0;display:grid;place-items:center;font-size:120px}
+  .card .info{position:absolute;left:0;right:0;bottom:0;padding:20px 18px 18px;
+    background:linear-gradient(transparent,rgba(0,0,0,.75))}
+  .card .name{font-size:26px;font-weight:700}
+  .card .city{opacity:.9;font-size:14px;margin:2px 0 8px}
+  .card .about{font-size:15px;line-height:1.35;opacity:.95}
+  .card .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .card .tags span{background:rgba(255,255,255,.22);padding:4px 10px;border-radius:999px;font-size:13px}
+  .stamp{position:absolute;top:26px;padding:6px 14px;border:3px solid;border-radius:10px;font-size:26px;
+    font-weight:800;opacity:0;transform:rotate(-14deg)}
+  .stamp.like{left:20px;color:var(--ok);border-color:var(--ok)}
+  .stamp.nope{right:20px;color:#ff3b30;border-color:#ff3b30;transform:rotate(14deg)}
+  .actions{display:flex;justify-content:center;gap:28px;padding:16px 0 4px}
+  .round{width:66px;height:66px;border-radius:50%;background:var(--bg);display:grid;place-items:center;
+    font-size:28px;box-shadow:0 4px 16px rgba(0,0,0,.14)}
+  .round.like{color:var(--accent)}
+  .round:active{transform:scale(.92)}
+  .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:30px}
+
+  /* Симпатии */
+  .match{display:flex;align-items:center;gap:12px;padding:12px;border-radius:16px;background:var(--bg2);margin-bottom:10px}
+  .match .mini{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;font-size:28px;flex:none}
+  .match .grow{flex:1;min-width:0}
+  .match .write{padding:9px 14px;border-radius:10px;background:var(--accent);color:#fff;font-size:14px;font-weight:600}
+
+  /* Нижнее меню */
+  .tabs{display:none;border-top:1px solid var(--bg2);background:var(--bg);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
+  .tabs.show{display:flex}
+  .tabs button{flex:1;padding:6px;font-size:11px;color:var(--hint);display:flex;flex-direction:column;align-items:center;gap:2px}
+  .tabs button b{font-size:22px;font-weight:400}
+  .tabs button.on{color:var(--accent)}
+  .badge{background:var(--accent);color:#fff;border-radius:999px;font-size:10px;padding:1px 6px;margin-left:2px}
+
+  /* Окно «Это взаимно!» */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.65);display:none;place-items:center;z-index:10;padding:24px}
+  .modal.show{display:grid}
+  .modal .box{background:var(--bg);border-radius:24px;padding:26px 22px;text-align:center;width:100%;max-width:360px;
+    animation:pop .35s ease}
+  .pair{display:flex;justify-content:center;margin:16px 0}
+  .pair>div{width:86px;height:86px;border-radius:50%;border:4px solid var(--bg);display:grid;place-items:center;font-size:42px;
+    background-size:cover;background-position:center}
+  .pair>div+div{margin-left:-18px}
+  @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+  .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;
+    padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 1. Создание / редактирование анкеты -->
+  <section class="screen" id="onboarding">
+    <h1>Искра ✨</h1>
+    <p class="muted" id="obHint">Расскажи о себе — и начнём знакомиться</p>
+
+    <div class="field avatar-pick">
+      <div class="avatar" id="avatarPreview">?</div>
+      <div>
+        <button class="chip" id="photoBtn">📷 Загрузить фото</button>
+        <input type="file" id="photoInput" accept="image/*" hidden>
+        <div class="muted" style="margin-top:6px">Необязательно</div>
+      </div>
+    </div>
+
+    <div class="field"><label>Имя</label><input id="fName" maxlength="30" placeholder="Как тебя зовут?"></div>
+    <div class="row">
+      <div class="field"><label>Возраст</label><input id="fAge" type="number" inputmode="numeric" min="18" max="99" placeholder="18+"></div>
+      <div class="field"><label>Город</label><input id="fCity" maxlength="40" placeholder="Москва"></div>
+    </div>
+
+    <div class="field"><label>Я</label>
+      <div class="seg" id="fGender"><button data-v="m">Парень</button><button data-v="f">Девушка</button></div>
+    </div>
+    <div class="field"><label>Ищу</label>
+      <div class="seg" id="fLook"><button data-v="f">Девушек</button><button data-v="m">Парней</button><button data-v="any">Всех</button></div>
+    </div>
+
+    <div class="field"><label>Интересы (до 5)</label><div class="chips" id="fTags"></div></div>
+    <div class="field"><label>О себе</label><textarea id="fAbout" maxlength="300" placeholder="Пара фраз о тебе"></textarea></div>
+
+    <button class="btn" id="saveBtn">Сохранить анкету</button>
+  </section>
+
+  <!-- 2. Лента анкет -->
+  <section class="screen" id="feed">
+    <div class="deck" id="deck"></div>
+    <div class="actions">
+      <button class="round" id="nopeBtn" aria-label="Пропустить">✕</button>
+      <button class="round like" id="likeBtn" aria-label="Нравится">♥</button>
+    </div>
+  </section>
+
+  <!-- 3. Взаимные симпатии -->
+  <section class="screen" id="matches">
+    <h2>Взаимные симпатии</h2>
+    <div id="matchList"></div>
+  </section>
+
+  <!-- 4. Мой профиль -->
+  <section class="screen" id="profile">
+    <h2>Моя анкета</h2>
+    <div id="myCard"></div>
+    <button class="btn" id="editBtn">Редактировать</button>
+    <button class="btn ghost" id="resetBtn">Сбросить лайки (начать заново)</button>
+  </section>
+
+  <nav class="tabs" id="tabs">
+    <button data-tab="feed" class="on"><b>🔥</b>Анкеты</button>
+    <button data-tab="matches"><b>💬</b><span>Симпатии<span class="badge" id="mBadge" hidden>0</span></span></button>
+    <button data-tab="profile"><b>👤</b>Профиль</button>
+  </nav>
+</div>
+
+<div class="modal" id="matchModal">
+  <div class="box">
+    <h1>Это взаимно! 💘</h1>
+    <div class="pair"><div id="mMe"></div><div id="mThem"></div></div>
+    <p class="muted" id="mText"></p>
+    <button class="btn" id="mWrite">Написать</button>
+    <button class="btn ghost" id="mClose">Смотреть дальше</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Telegram
+   ============================================================ */
+const tg = window.Telegram ? window.Telegram.WebApp : null;
+const inTelegram = !!(tg && tg.initData);   // initData пустая, если страницу открыли просто в браузере
+if (tg) {
+  tg.ready();     // сообщаем Telegram, что приложение загрузилось
+  tg.expand();    // разворачиваем на весь экран
+  // Чтобы свайп карточки вниз не закрывал приложение (есть в Telegram с версии 7.7)
+  if (tg.isVersionAtLeast && tg.isVersionAtLeast('7.7')) tg.disableVerticalSwipes();
+}
+const tgUser = tg && tg.initDataUnsafe ? tg.initDataUnsafe.user : null;
+
+function haptic(type) {
+  if (!tg || !tg.HapticFeedback) return;
+  if (type === 'success' || type === 'error') tg.HapticFeedback.notificationOccurred(type);
+  else tg.HapticFeedback.impactOccurred(type || 'light');
+}
+
+/* ============================================================
+   Хранилище.
+   В Telegram — CloudStorage (данные привязаны к пользователю и боту,
+   сохраняются между устройствами). В браузере — localStorage.
+   ============================================================ */
+const useCloud = inTelegram && tg.CloudStorage && tg.isVersionAtLeast('6.9');
+const store = {
+  get(key) {
+    return new Promise(resolve => {
+      if (useCloud) {
+        tg.CloudStorage.getItem(key, (err, val) => resolve(err || !val ? null : JSON.parse(val)));
+      } else {
+        try { const v = localStorage.getItem('iskra_' + key); resolve(v ? JSON.parse(v) : null); }
+        catch (e) { resolve(null); }
+      }
+    });
+  },
+  set(key, value) {
+    const str = JSON.stringify(value);
+    if (useCloud) tg.CloudStorage.setItem(key, str);
+    else { try { localStorage.setItem('iskra_' + key, str); } catch (e) {} }
+  }
+};
+// Фото слишком большое для CloudStorage (лимит 4096 символов), поэтому храним его локально
+const photoStore = {
+  get() { try { return localStorage.getItem('iskra_photo'); } catch (e) { return null; } },
+  set(v) { try { v ? localStorage.setItem('iskra_photo', v) : localStorage.removeItem('iskra_photo'); } catch (e) {} }
+};
+
+/* ============================================================
+   Демо-анкеты. Когда появится сервер — их заменит запрос к API.
+   ============================================================ */
+const PROFILES = [
+  {id:1,  name:'Алина',   age:21, g:'f', city:'Москва',          emoji:'🌸', bg:['#ff9a9e','#fad0c4'], about:'Учусь на дизайнера, рисую по ночам. Ищу компанию для выставок и кофе.', tags:['Искусство','Кофе','Кино']},
+  {id:2,  name:'Даша',    age:23, g:'f', city:'Санкт-Петербург', emoji:'📚', bg:['#a18cd1','#fbc2eb'], about:'Читаю больше, чем сплю. Обожаю белые ночи и долгие прогулки по набережным.', tags:['Книги','Прогулки','Философия']},
+  {id:3,  name:'Вика',    age:20, g:'f', city:'Казань',          emoji:'🏐', bg:['#f6d365','#fda085'], about:'Волейбол, горы и спонтанные поездки. Если зовёшь в поход — я уже собираю рюкзак.', tags:['Спорт','Путешествия','Горы']},
+  {id:4,  name:'Соня',    age:24, g:'f', city:'Москва',          emoji:'🎧', bg:['#84fab0','#8fd3f4'], about:'Работаю в IT, по выходным хожу на концерты. Хочу найти человека, с кем не скучно молчать.', tags:['Музыка','IT','Концерты']},
+  {id:5,  name:'Катя',    age:22, g:'f', city:'Новосибирск',     emoji:'🐈', bg:['#fccb90','#d57eeb'], about:'Два кота, тысяча растений и любовь к готовке. Накормлю пастой собственного приготовления.', tags:['Кулинария','Животные','Кино']},
+  {id:6,  name:'Полина',  age:19, g:'f', city:'Екатеринбург',    emoji:'💃', bg:['#ff758c','#ff7eb3'], about:'Танцую сальсу, учу испанский. Мечтаю о Барселоне.', tags:['Танцы','Языки','Путешествия']},
+  {id:7,  name:'Артём',   age:22, g:'m', city:'Москва',          emoji:'🎸', bg:['#4facfe','#00f2fe'], about:'Играю на гитаре в кавер-группе. Учусь на программиста. Приглашу на наш концерт.', tags:['Музыка','IT','Концерты']},
+  {id:8,  name:'Никита',  age:24, g:'m', city:'Санкт-Петербург', emoji:'📷', bg:['#43e97b','#38f9d7'], about:'Фотограф-любитель. Знаю все красивые крыши города (легальные, честно).', tags:['Фото','Прогулки','Искусство']},
+  {id:9,  name:'Максим',  age:21, g:'m', city:'Казань',          emoji:'🏂', bg:['#667eea','#764ba2'], about:'Зимой сноуборд, летом сапборд. Ищу ту, кто не боится приключений.', tags:['Спорт','Горы','Путешествия']},
+  {id:10, name:'Илья',    age:25, g:'m', city:'Москва',          emoji:'☕', bg:['#c79081','#dfa579'], about:'Бариста и немного философ. Сварю идеальный капучино и поспорю о Канте.', tags:['Кофе','Философия','Книги']},
+  {id:11, name:'Денис',   age:23, g:'m', city:'Новосибирск',     emoji:'🎮', bg:['#30cfd0','#330867'], about:'Геймдев, настолки и аниме. Ищу второго игрока.', tags:['Игры','IT','Кино']},
+  {id:12, name:'Егор',    age:20, g:'m', city:'Екатеринбург',    emoji:'🍳', bg:['#f093fb','#f5576c'], about:'Готовлю лучше, чем выгляжу на фото. Учу итальянский ради еды.', tags:['Кулинария','Языки','Путешествия']},
+];
+const ALL_TAGS = ['Музыка','Кино','Книги','Спорт','Путешествия','Кофе','IT','Игры','Искусство','Танцы',
+                  'Кулинария','Фото','Прогулки','Горы','Языки','Животные','Концерты','Философия'];
+
+/* ============================================================
+   Состояние приложения
+   ============================================================ */
+let me = null;            // моя анкета
+let likes = [];           // id тех, кого лайкнул
+let passes = [];          // id тех, кого пропустил
+let matches = [];         // id взаимных
+let queue = [];           // очередь анкет на показ
+let lastMatch = null;
+
+const $ = id => document.getElementById(id);
+const bgOf = p => `linear-gradient(135deg, ${p.bg[0]}, ${p.bg[1]})`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function toast(text) {
+  const t = $('toast'); t.textContent = text; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+/* ---------- навигация ---------- */
+function show(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === screenId));
+  $('tabs').classList.toggle('show', screenId !== 'onboarding');
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === screenId));
+  if (screenId === 'matches') renderMatches();
+  if (screenId === 'profile') renderMyCard();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { haptic(); show(b.dataset.tab); });
+
+/* ============================================================
+   Анкета (создание/редактирование)
+   ============================================================ */
+const form = { gender: null, look: null, tags: [], photo: null };
+
+function setupSeg(id, key) {
+  $(id).querySelectorAll('button').forEach(b => b.onclick = () => {
+    haptic(); form[key] = b.dataset.v;
+    $(id).querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  });
+}
+setupSeg('fGender', 'gender');
+setupSeg('fLook', 'look');
+
+function renderTagPicker() {
+  $('fTags').innerHTML = ALL_TAGS.map(t =>
+    `<button class="chip ${form.tags.includes(t) ? 'on' : ''}" data-t="${t}">${t}</button>`).join('');
+  $('fTags').querySelectorAll('button').forEach(b => b.onclick = () => {
+    const t = b.dataset.t;
+    if (form.tags.includes(t)) form.tags = form.tags.filter(x => x !== t);
+    else if (form.tags.length < 5) form.tags.push(t);
+    else { toast('Можно выбрать до 5 интересов'); haptic('error'); return; }
+    haptic(); renderTagPicker();
+  });
+}
+
+function updateAvatarPreview() {
+  const a = $('avatarPreview');
+  if (form.photo) { a.style.backgroundImage = `url(${form.photo})`; a.textContent = ''; }
+  else { a.style.backgroundImage = ''; a.textContent = ($('fName').value.trim()[0] || '?').toUpperCase(); }
+}
+$('fName').addEventListener('input', updateAvatarPreview);
+
+// Загрузка фото: уменьшаем до 400px, чтобы не забивать память
+$('photoBtn').onclick = () => $('photoInput').click();
+$('photoInput').onchange = e => {
+  const file = e.target.files[0]; if (!file) return;
+  const img = new Image();
+  img.onload = () => {
+    const size = 400, c = document.createElement('canvas');
+    const s = Math.min(img.width, img.height);
+    c.width = c.height = size;
+    c.getContext('2d').drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, size, size);
+    form.photo = c.toDataURL('image/jpeg', 0.8);
+    URL.revokeObjectURL(img.src);
+    updateAvatarPreview();
+  };
+  img.src = URL.createObjectURL(file);
+};
+
+function openForm(editing) {
+  $('obHint').textContent = editing ? 'Изменения сохранятся сразу' : 'Расскажи о себе — и начнём знакомиться';
+  const src = me || {};
+  $('fName').value = src.name || (tgUser ? tgUser.first_name : '');
+  $('fAge').value = src.age || '';
+  $('fCity').value = src.city || '';
+  $('fAbout').value = src.about || '';
+  form.gender = src.gender || null;
+  form.look = src.look || null;
+  form.tags = [...(src.tags || [])];
+  form.photo = photoStore.get();
+  ['fGender', 'fLook'].forEach((id, i) => {
+    const v = i === 0 ? form.gender : form.look;
+    $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  });
+  renderTagPicker(); updateAvatarPreview(); show('onboarding');
+}
+
+$('saveBtn').onclick = () => {
+  const name = $('fName').value.trim();
+  const age = parseInt($('fAge').value, 10);
+  const city = $('fCity').value.trim();
+  if (!name) return fail('Введи имя');
+  if (!age || age < 18 || age > 99) return fail('Сервис только для 18+');
+  if (!city) return fail('Укажи город');
+  if (!form.gender) return fail('Выбери, кто ты');
+  if (!form.look) return fail('Выбери, кого ищешь');
+
+  me = { name, age, city, gender: form.gender, look: form.look, tags: form.tags, about: $('fAbout').value.trim() };
+  store.set('profile', me);
+  photoStore.set(form.photo);
+  haptic('success');
+  buildQueue(); show('feed');
+};
+function fail(msg) { toast(msg); haptic('error'); }
+
+/* ============================================================
+   Лента и свайпы
+   ============================================================ */
+function buildQueue() {
+  const seen = new Set([...likes, ...passes]);
+  queue = PROFILES.filter(p => !seen.has(p.id) && (me.look === 'any' || p.g === me.look));
+  // Сначала показываем тех, у кого больше общих интересов
+  const common = p => p.tags.filter(t => me.tags.includes(t)).length;
+  queue.sort((a, b) => common(b) - common(a));
+  renderDeck();
+}
+
+function cardHTML(p) {
+  const common = p.tags.filter(t => me.tags.includes(t));
+  return `
+    <div class="pic" style="background:${bgOf(p)}">${p.emoji}</div>
+    <div class="stamp like">LIKE</div><div class="stamp nope">НЕТ</div>
+    <div class="info">
+      <div class="name">${esc(p.name)}, ${p.age}</div>
+      <div class="city">📍 ${esc(p.city)}${common.length ? ` · общих интересов: ${common.length}` : ''}</div>
+      <div class="about">${esc(p.about)}</div>
+      <div class="tags">${p.tags.map(t => `<span>${common.includes(t) ? '★ ' : ''}${esc(t)}</span>`).join('')}</div>
+    </div>`;
+}
+
+function renderDeck() {
+  const deck = $('deck');
+  deck.innerHTML = '';
+  if (!queue.length) {
+    deck.innerHTML = `<div class="empty"><div><div style="font-size:56px">🌙</div>
+      <h2>Анкеты закончились</h2><p class="muted">Загляни позже или сбрось лайки в профиле</p></div></div>`;
+    $('likeBtn').disabled = $('nopeBtn').disabled = true;
+    return;
+  }
+  $('likeBtn').disabled = $('nopeBtn').disabled = false;
+  // Рисуем две верхние карточки: вторая лежит под первой
+  queue.slice(0, 2).reverse().forEach((p, i, arr) => {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML = cardHTML(p);
+    const isTop = i === arr.length - 1;
+    if (!isTop) el.style.transform = 'scale(.95) translateY(12px)';
+    else attachDrag(el);
+    deck.appendChild(el);
+  });
+}
+
+function attachDrag(card) {
+  let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
+  const like = card.querySelector('.stamp.like'), nope = card.querySelector('.stamp.nope');
+
+  card.addEventListener('pointerdown', e => {
+    dragging = true; startX = e.clientX; startY = e.clientY;
+    card.setPointerCapture(e.pointerId); card.style.transition = 'none';
+  });
+  card.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    dx = e.clientX - startX; dy = e.clientY - startY;
+    card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+    like.style.opacity = Math.max(0, Math.min(1, dx / 100));
+    nope.style.opacity = Math.max(0, Math.min(1, -dx / 100));
+  });
+  const end = () => {
+    if (!dragging) return; dragging = false;
+    if (Math.abs(dx) > 110) decide(dx > 0 ? 'like' : 'nope', card);
+    else {
+      card.style.transition = 'transform .25s';
+      card.style.transform = ''; like.style.opacity = nope.style.opacity = 0;
+    }
+    dx = dy = 0;
+  };
+  card.addEventListener('pointerup', end);
+  card.addEventListener('pointercancel', end);
+}
+
+function decide(kind, card) {
+  const p = queue[0]; if (!p) return;
+  card = card || $('deck').lastElementChild;
+  // Анимация улёта карточки
+  card.style.transition = 'transform .35s ease-out';
+  card.style.transform = `translate(${kind === 'like' ? 600 : -600}px, 40px) rotate(${kind === 'like' ? 30 : -30}deg)`;
+  card.querySelector(kind === 'like' ? '.stamp.like' : '.stamp.nope').style.opacity = 1;
+  haptic(kind === 'like' ? 'medium' : 'light');
+
+  if (kind === 'like') {
+    likes.push(p.id); store.set('likes', likes);
+    // ДЕМО: «ответная» симпатия случайна (больше шансов при общих интересах).
+    // В настоящем приложении взаимность проверяет сервер.
+    const common = p.tags.filter(t => me.tags.includes(t)).length;
+    if (Math.random() < 0.3 + common * 0.15) {
+      matches.push(p.id); store.set('matches', matches);
+      setTimeout(() => showMatch(p), 380);
+    }
+  } else {
+    passes.push(p.id); store.set('passes', passes);
+  }
+  queue.shift();
+  updateBadge();
+  setTimeout(renderDeck, 330);
+}
+$('likeBtn').onclick = () => decide('like');
+$('nopeBtn').onclick = () => decide('nope');
+
+/* ---------- окно «Это взаимно» ---------- */
+function setMyAvatar(el) {
+  const photo = photoStore.get();
+  if (photo) { el.style.backgroundImage = `url(${photo})`; el.textContent = ''; }
+  else { el.style.background = 'linear-gradient(135deg,#ff4d6d,#7b5cff)'; el.textContent = me.name[0].toUpperCase();
+         el.style.color = '#fff'; el.style.fontWeight = '700'; }
+}
+function showMatch(p) {
+  lastMatch = p;
+  setMyAvatar($('mMe'));
+  $('mThem').style.background = bgOf(p); $('mThem').textContent = p.emoji;
+  $('mText').textContent = `Ты и ${p.name} понравились друг другу`;
+  $('matchModal').classList.add('show');
+  haptic('success');
+}
+$('mClose').onclick = () => $('matchModal').classList.remove('show');
+$('mWrite').onclick = () => { $('matchModal').classList.remove('show'); writeTo(lastMatch); };
+
+function writeTo(p) {
+  // У настоящих пользователей будет username → откроем чат так:
+  // if (p.username) return tg.openTelegramLink('https://t.me/' + p.username);
+  toast(`В демо-режиме написать ${p.name} нельзя`);
+}
+
+/* ============================================================
+   Симпатии и профиль
+   ============================================================ */
+function updateBadge() {
+  const b = $('mBadge'); b.textContent = matches.length; b.hidden = matches.length === 0;
+}
+function renderMatches() {
+  const list = matches.map(id => PROFILES.find(p => p.id === id)).filter(Boolean).reverse();
+  $('matchList').innerHTML = list.length ? list.map(p => `
+    <div class="match">
+      <div class="mini" style="background:${bgOf(p)}">${p.emoji}</div>
+      <div class="grow"><b>${esc(p.name)}, ${p.age}</b><div class="muted">${esc(p.city)}</div></div>
+      <button class="write" data-id="${p.id}">Написать</button>
+    </div>`).join('')
+    : `<p class="muted">Пока нет взаимных симпатий. Ставь лайки в ленте — и они появятся здесь.</p>`;
+  $('matchList').querySelectorAll('.write').forEach(b =>
+    b.onclick = () => writeTo(PROFILES.find(p => p.id === +b.dataset.id)));
+}
+function renderMyCard() {
+  const look = { f: 'девушек', m: 'парней', any: 'всех' }[me.look];
+  $('myCard').innerHTML = `
+    <div class="match" style="align-items:flex-start">
+      <div class="avatar" id="myAva" style="width:70px;height:70px;font-size:28px"></div>
+      <div class="grow">
+        <b style="font-size:18px">${esc(me.name)}, ${me.age}</b>
+        <div class="muted">📍 ${esc(me.city)} · ищу ${look}</div>
+        ${me.about ? `<p style="margin:8px 0 0">${esc(me.about)}</p>` : ''}
+        <div class="chips" style="margin-top:8px">${me.tags.map(t => `<span class="chip">${esc(t)}</span>`).join('')}</div>
+      </div>
+    </div>
+    <p class="muted">Лайков: ${likes.length} · взаимных: ${matches.length}</p>`;
+  setMyAvatar($('myAva'));
+}
+$('editBtn').onclick = () => openForm(true);
+$('resetBtn').onclick = () => {
+  const doReset = ok => {
+    if (!ok) return;
+    likes = []; passes = []; matches = [];
+    store.set('likes', likes); store.set('passes', passes); store.set('matches', matches);
+    updateBadge(); buildQueue(); renderMyCard(); toast('Готово, анкеты снова в ленте');
+  };
+  if (inTelegram && tg.showConfirm) tg.showConfirm('Сбросить все лайки и симпатии?', doReset);
+  else doReset(confirm('Сбросить все лайки и симпатии?'));
+};
+
+/* ============================================================
+   Запуск
+   ============================================================ */
+(async function init() {
+  [me, likes, passes, matches] = await Promise.all(['profile', 'likes', 'passes', 'matches'].map(k => store.get(k)));
+  likes = likes || []; passes = passes || []; matches = matches || [];
+  updateBadge();
+  if (me) { buildQueue(); show('feed'); }
+  else openForm(false);
+})();
+</script>
+</body>
+</html>
